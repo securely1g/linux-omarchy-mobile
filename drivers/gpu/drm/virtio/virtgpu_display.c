@@ -112,6 +112,18 @@ static void virtio_gpu_crtc_atomic_disable(struct drm_crtc *crtc,
 	struct drm_device *dev = crtc->dev;
 	struct virtio_gpu_device *vgdev = dev->dev_private;
 	struct virtio_gpu_output *output = drm_crtc_to_virtio_gpu_output(crtc);
+	struct drm_crtc_state *old_crtc_state = drm_atomic_get_old_crtc_state(state, crtc);
+	struct drm_crtc_commit *previous = old_crtc_state->commit;
+
+	/*
+	 * An earlier flip can be visible before its commit tail has finished
+	 * waiting for vblank. Keep its timer running until that cleanup is
+	 * complete, even when the next commit turns the output off.
+	 */
+	if (previous)
+		drm_WARN(crtc->dev, !wait_for_completion_timeout(&previous->cleanup_done, 10 * HZ),
+			 "[CRTC:%d:%s] previous cleanup timed out before disable\n",
+			 crtc->base.id, crtc->name);
 
 	drm_crtc_vblank_off(crtc);
 
